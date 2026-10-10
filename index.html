@@ -5,56 +5,89 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3-Circle Cover</title>
 <style>
-  :root{--bg:#f7f7f5;--fg:#1d1d1b;--card:#fff;--line:#d8d8d2;--acc:#2f6fed;--mut:#777}
-  @media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#222;--line:#444;--acc:#6b9bff;--mut:#999}}
-  html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
-  body{display:flex;flex-direction:column}
-  #bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px}
-  button{font:inherit;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer}
-  button.p{background:var(--acc);color:#fff;border-color:var(--acc)}
-  button:disabled{opacity:.4}
-  #info{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px}
-  #tt{font-weight:700;font-variant-numeric:tabular-nums;min-width:48px}
-  #tbar{height:6px;margin:0 10px 8px;background:var(--line);border-radius:3px;overflow:hidden}
-  #tfill{display:block;height:100%;width:100%;background:var(--acc)}
-  #wrap{flex:1;min-height:200px;margin:0 10px 10px;position:relative}
-  canvas{position:absolute;left:0;top:0;width:100%;height:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
-  .ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:5;text-align:center;padding:20px}
-  #over{inset:auto 0 0 0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:14px 20px 20px;gap:8px;box-shadow:0 -4px 20px rgba(0,0,0,.15)}
-  #over h1{font-size:22px;margin:0}
+  :root{--bg:#f4f4f8;--fg:#17171c;--card:#fff;--line:#e3e3ea;--acc:#4f46e5;--acc2:#7c3aed;--mut:#7a7a88;--ok:#16a34a;--shadow:0 6px 24px rgba(30,30,60,.08)}
+  @media (prefers-color-scheme:dark){:root{--bg:#0f0f14;--fg:#f1f1f6;--card:#1a1a22;--line:#2b2b36;--acc:#818cf8;--acc2:#a78bfa;--mut:#9a9aab;--ok:#4ade80;--shadow:0 6px 24px rgba(0,0,0,.4)}}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+  body{display:flex;flex-direction:column;max-width:900px;margin:0 auto}
+  button{font:inherit;color:var(--fg);cursor:pointer;border:0;background:none;padding:0}
   .hidden{display:none!important}
-  .ov h1{margin:0 0 8px;font-size:28px}
-  .card{width:min(320px,86vw);padding:16px;text-align:left}
-  .card b{display:block;font-size:17px;margin-bottom:4px}
-  .card span{font-size:13px;color:var(--mut)}
-  #toast{position:fixed;left:0;right:0;top:40%;text-align:center;font-size:36px;font-weight:800;pointer-events:none;opacity:0;transition:opacity .2s;z-index:4;color:var(--acc)}
-  #toast.show{opacity:1}
+
+  #top{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
+  .ib{width:38px;height:38px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:18px;box-shadow:var(--shadow);flex:none}
+  #title{font-weight:700;font-size:18px;letter-spacing:-.01em}
+  .chips{margin-left:auto;display:flex;gap:6px}
+  .chip{padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+  #tt{min-width:64px;text-align:center;color:var(--acc)}
+  #tbar{height:5px;margin:0 16px 8px;background:var(--line);border-radius:3px;overflow:hidden}
+  #tfill{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:3px}
+
+  #wrap{flex:1;min-height:200px;margin:0 12px;position:relative;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);
+        background:var(--card);background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
+  canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;background:transparent}
+  #stats{position:absolute;top:12px;left:12px;display:flex;gap:6px;align-items:center;pointer-events:none}
+  .pill{padding:6px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+  .pill.sub{font-weight:500;color:var(--mut)}
+  #cov.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+  #hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:var(--fg);color:var(--bg);font-size:13px;white-space:nowrap;pointer-events:none;opacity:.9}
+
+  #dock{display:flex;gap:10px;justify-content:center;padding:12px 12px max(16px,env(safe-area-inset-bottom))}
+  .btn{flex:1;max-width:220px;padding:13px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:15px;box-shadow:var(--shadow);transition:transform .08s,opacity .15s}
+  .btn:active{transform:scale(.97)}
+  .btn.p{background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:transparent;color:#fff}
+  .btn:disabled{opacity:.4;box-shadow:none}
+
+  .ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:5;text-align:center;padding:24px}
+  #menu h1{margin:0;font-size:32px;letter-spacing:-.02em;background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  #menu .sub{margin:0 0 14px;color:var(--mut);font-size:15px}
+  .card{width:min(360px,100%);display:flex;gap:14px;align-items:center;padding:16px;text-align:left;border-radius:18px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);transition:transform .1s}
+  .card:active{transform:scale(.98)}
+  .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:22px;font-style:normal;background:var(--bg);flex:none}
+  .card b{display:block;font-size:17px;margin-bottom:3px}
+  .card span{font-size:13px;color:var(--mut);line-height:1.4}
+  .badge{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:999px;background:var(--bg);font-weight:600;color:var(--acc)!important}
+  #best:empty{display:none}
+
+  #over{inset:auto 0 0 0;background:var(--card);border-top:1px solid var(--line);border-radius:22px 22px 0 0;padding:18px 20px max(20px,env(safe-area-inset-bottom));gap:10px;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
+  #over h1{font-size:22px;margin:0}
+  #overTxt{font-size:15px;line-height:1.6;color:var(--mut)}
+  #toast{position:fixed;left:0;right:0;top:38%;text-align:center;font-size:38px;font-weight:800;letter-spacing:-.02em;pointer-events:none;opacity:0;transform:scale(.9);transition:opacity .2s,transform .2s;z-index:4;color:var(--acc);text-shadow:0 2px 20px var(--bg)}
+  #toast.show{opacity:1;transform:scale(1)}
 </style>
 </head>
 <body>
-<div id="bar">
-  <button id="bMenu">☰ Menu</button>
-  <button id="bConfirm" disabled>Close shape</button>
-  <button id="bClear">Redraw</button>
-  <button id="bSolve" class="p" disabled>Solve</button>
-  <button id="bNext">Next shape</button>
-  <div id="tt" class="hidden"></div>
-  <div id="info"></div>
-</div>
+<header id="top">
+  <button id="bMenu" class="ib" aria-label="Back to menu">←</button>
+  <div id="title"></div>
+  <div class="chips"><span id="lv" class="chip hidden"></span><span id="tt" class="chip hidden"></span></div>
+</header>
 <div id="tbar" class="hidden"><i id="tfill"></i></div>
-<div id="wrap"><canvas id="cv"></canvas></div>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="stats" class="hidden"><span id="cov" class="pill"></span><span id="rad" class="pill sub"></span></div>
+  <div id="hint" class="hidden"></div>
+</div>
+<div id="dock">
+  <button id="bClear" class="btn">↺ Redraw</button>
+  <button id="bConfirm" class="btn p" disabled>✓ Close shape</button>
+  <button id="bNext" class="btn">→ Next shape</button>
+  <button id="bSolve" class="btn p" disabled>✦ Solve</button>
+</div>
 
 <div id="menu" class="ov">
   <h1>3-Circle Cover</h1>
-  <button class="card" id="mFree"><b>Freehand</b><span>Draw your own shape and cover it with 3 circles of the smallest possible radius</span></button>
-  <button class="card" id="mRush"><b>Puzzle Rush</b><span>Cover 100% before time runs out to advance. Each level gets faster and tighter</span><span id="best" style="display:block;margin-top:6px"></span></button>
-  <button class="card" id="mZen"><b>Zen</b><span>Random shapes with no time limit. Relax and take your time</span></button>
+  <p class="sub">Cover any shape with three equal circles</p>
+  <button class="card" id="mFree"><i class="ic">✏️</i><div><b>Freehand</b><span>Draw your own shape and find the smallest radius that covers it</span></div></button>
+  <button class="card" id="mRush"><i class="ic">⚡</i><div><b>Puzzle Rush</b><span>Cover 100% before time runs out. Every level is faster and tighter</span><span id="best" class="badge"></span></div></button>
+  <button class="card" id="mZen"><i class="ic">🌿</i><div><b>Zen</b><span>Random shapes, no timer. Relax and take your time</span></div></button>
 </div>
 <div id="over" class="ov hidden">
   <h1>Time's up</h1>
-  <div id="overTxt" style="font-size:16px;line-height:1.5"></div>
-  <div style="display:flex;gap:8px"><button class="p" id="oRetry">Try again</button>
-  <button id="oMenu">Menu</button></div>
+  <div id="overTxt"></div>
+  <div style="display:flex;gap:10px;width:100%;justify-content:center">
+    <button class="btn p" id="oRetry">Try again</button>
+    <button class="btn" id="oMenu">Menu</button>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -262,7 +295,7 @@ function toast(t,ms){const el=$('toast');el.textContent=t;el.classList.add('show
 function stopTimer(){clearInterval(timerId);timerId=null;}
 function resetState(){
   stopTimer();stroke=[];poly=null;inside=[];circles=[];solved=null;anim=null;drag=null;cleared=false;
-  $('toast').classList.remove('show');$('bConfirm').disabled=true;$('bSolve').disabled=true;
+  $('toast').classList.remove('show');$('bConfirm').disabled=true;$('bSolve').disabled=true;show('stats',false);info('');
 }
 function openMenu(){
   stopTimer();phase='idle';show('over',false);show('menu',true);
@@ -272,7 +305,8 @@ function enterMode(m){
   mode=m;resetState();show('menu',false);show('over',false);
   show('bConfirm',m==='free');show('bClear',m==='free');
   show('bSolve',m!=='rush');show('bNext',m==='zen');
-  show('tt',m==='rush');show('tbar',m==='rush');
+  show('tt',m==='rush');show('tbar',m==='rush');show('lv',m==='rush');show('dock',m!=='rush');
+  $('title').textContent={free:'Freehand',rush:'Puzzle Rush',zen:'Zen'}[m];
   resize();
   if(m==='free'){phase='draw';info('Draw any shape on the canvas');draw();}
   else if(m==='rush'){level=1;score=0;startLevel();}
@@ -310,7 +344,7 @@ const timeFor=l=>Math.max(7,32-2.5*(l-1));
 const slackFor=l=>Math.max(0.015,0.05-0.005*(l-1));
 function startLevel(){
   stopTimer();phase='wait';cleared=false;poly=null;circles=[];draw();
-  toast(`LEVEL ${level}`);$('tt').textContent='';$('tfill').style.width='100%';
+  $('lv').textContent=`Level ${level}`;toast(`LEVEL ${level}`);$('tt').textContent='';$('tfill').style.width='100%';
   setTimeout(()=>{
     do{poly=randomShape(level);}while(!prepare(slackFor(level)));
     draw();
@@ -361,35 +395,38 @@ $('bSolve').onclick=()=>{
 };
 
 /* ================= render ================= */
-function info(t){$('info').textContent=t}
+function info(t){const h=$('hint');h.textContent=t;h.classList.toggle('hidden',!t);}
+const FG=()=>getComputedStyle(document.documentElement).getPropertyValue('--fg').trim()||'#222';
+const ACC=()=>getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()||'#4f46e5';
 function path(c,P,close){c.beginPath();P.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));if(close)c.closePath();}
 function draw(){
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
   if(!poly){
-    if(stroke.length&&phase==='draw'){ctx.strokeStyle='#2f6fed';ctx.lineWidth=2.5;ctx.lineJoin='round';path(ctx,stroke,false);ctx.stroke();
+    if(stroke.length&&phase==='draw'){ctx.strokeStyle=ACC();ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';path(ctx,stroke,false);ctx.stroke();
       ctx.setLineDash([5,5]);ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(stroke[stroke.length-1].x,stroke[stroke.length-1].y);ctx.lineTo(stroke[0].x,stroke[0].y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
     return;
   }
   mctx.setTransform(dpr,0,0,dpr,0,0);mctx.clearRect(0,0,W,H);
-  mctx.globalCompositeOperation='source-over';mctx.fillStyle='rgba(235,60,60,.75)';
+  mctx.globalCompositeOperation='source-over';mctx.fillStyle='rgba(239,68,68,.7)';
   path(mctx,poly,true);mctx.fill('evenodd');
   mctx.globalCompositeOperation='destination-out';mctx.fillStyle='#000';
   for(const c of circles){mctx.beginPath();mctx.arc(c.x,c.y,R,0,7);mctx.fill();}
   ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(mask,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.save();path(ctx,poly,true);ctx.clip('evenodd');
-  ctx.fillStyle='rgba(60,170,100,.45)';
+  ctx.fillStyle='rgba(34,197,94,.4)';
   for(const c of circles){ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.fill();}
   ctx.restore();
-  ctx.strokeStyle='#222';ctx.lineWidth=2;ctx.lineJoin='round';path(ctx,poly,true);ctx.stroke();
+  ctx.strokeStyle=FG();ctx.lineWidth=2.5;ctx.lineJoin='round';path(ctx,poly,true);ctx.stroke();
   circles.forEach((c,i)=>{
-    ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.strokeStyle=['#2f6fed','#e08a00','#8a3fd1'][i%3];ctx.lineWidth=2.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.strokeStyle=['#4f46e5','#f59e0b','#ec4899'][i%3];ctx.lineWidth=2.5;ctx.stroke();
     ctx.beginPath();ctx.arc(c.x,c.y,3,0,7);ctx.fillStyle=ctx.strokeStyle;ctx.fill();
   });
   if(phase==='draw')return;
   const un=uncoveredPx(circles,R);
   const pu=un>0?Math.max(0.1,un/totalPx*100):0;
-  const pre=mode==='rush'?`Lv ${level} · `:'';
-  info(`${pre}r = ${R.toFixed(1)}px · covered ${(100-pu).toFixed(1)}%`+(un===0?' ✔':''));
+  info('');show('stats',true);
+  $('cov').textContent=`${(100-pu).toFixed(1)}% covered`+(un===0?' ✓':'');$('cov').classList.toggle('ok',un===0);
+  $('rad').textContent=`r = ${R.toFixed(1)}px`;
   if(mode==='rush'&&phase==='play'&&un===0&&!cleared&&!anim)levelClear();
 }
 openMenu();
