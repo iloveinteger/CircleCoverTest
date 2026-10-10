@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3원 덮기 퍼즐</title>
+<style>
+  :root{--bg:#f7f7f5;--fg:#1d1d1b;--card:#fff;--line:#d8d8d2;--acc:#2f6fed}
+  @media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#222;--line:#444;--acc:#6b9bff}}
+  html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+  body{display:flex;flex-direction:column}
+  #bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px}
+  button{font:inherit;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}
+  button.p{background:var(--acc);color:#fff;border-color:var(--acc)}
+  button:disabled{opacity:.4}
+  #info{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px}
+  #wrap{flex:1;min-height:200px;margin:0 10px 10px;position:relative}
+  canvas{position:absolute;left:0;top:0;width:100%;height:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
+</style>
+</head>
+<body>
+<div id="bar">
+  <button id="bConfirm" disabled>폐곡선 확정</button>
+  <button id="bClear">다시 그리기</button>
+  <button id="bSolve" class="p" disabled>Solve</button>
+  <div id="info">캔버스에 도형을 자유롭게 그리세요</div>
+</div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+let W=0,H=0,dpr=1;
+let stroke=[],poly=null,inside=[],R=0,circles=[],solved=null,mode='draw',drag=null,anim=null;
+const mask=document.createElement('canvas'),mctx=mask.getContext('2d');
+
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  const r=cv.getBoundingClientRect();W=r.width;H=r.height;
+  cv.width=W*dpr;cv.height=H*dpr;mask.width=cv.width;mask.height=cv.height;
+  draw();
+}
+addEventListener('resize',resize);
+
+/* ---------- geometry ---------- */
+function pip(x,y,P){let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){
+  const a=P[i],b=P[j];
+  if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)c=!c;}return c;}
+const d2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
+function c2(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2,r:Math.sqrt(d2(a,b))/2}}
+function c3(a,b,c){
+  const A=b.x-a.x,B=b.y-a.y,C=c.x-a.x,D=c.y-a.y,E=A*(a.x+b.x)+B*(a.y+b.y),F=C*(a.x+c.x)+D*(a.y+c.y),G=2*(A*(c.y-b.y)-B*(c.x-b.x));
+  if(Math.abs(G)<1e-9){const s=[c2(a,b),c2(a,c),c2(b,c)];return s.sort((p,q)=>q.r-p.r)[0];}
+  const x=(D*E-B*F)/G,y=(A*F-C*E)/G;return{x,y,r:Math.sqrt((x-a.x)**2+(y-a.y)**2)};
+}
+const inC=(c,p)=>c&&Math.sqrt((p.x-c.x)**2+(p.y-c.y)**2)<=c.r+1e-7;
+/* Welzl (iterative, expected O(n)) : minimum enclosing circle */
+function mec(P){
+  P=P.slice();for(let i=P.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[P[i],P[j]]=[P[j],P[i]];}
+  let c=null;
+  for(let i=0;i<P.length;i++)if(!inC(c,P[i])){
+    c={x:P[i].x,y:P[i].y,r:0};
+    for(let j=0;j<i;j++)if(!inC(c,P[j])){
+      c=c2(P[i],P[j]);
+      for(let k=0;k<j;k++)if(!inC(c,P[k]))c=c3(P[i],P[j],P[k]);
+    }
+  }
+  return c||{x:0,y:0,r:0};
+}
+
+/* ---------- 3-center solver: k-center restarts + per-cluster MEC refinement ---------- */
+function solve3(P){
+  let best=null;const all=[];
+  for(let t=0;t<12;t++){
+    // farthest-point style random init
+    let cs=[P[Math.random()*P.length|0]];
+    while(cs.length<3){
+      let far=null,fd=-1;
+      for(let n=0;n<40;n++){const p=P[Math.random()*P.length|0];
+        const m=Math.min(...cs.map(c=>d2(c,p)));if(m>fd){fd=m;far=p}}
+      cs.push(far);
+    }
+    cs=cs.map(c=>({x:c.x,y:c.y,r:0}));
+    let prev=1e18;
+    for(let it=0;it<20;it++){
+      const cl=[[],[],[]];
+      for(const p of P){let bi=0,bd=1e18;
+        for(let i=0;i<3;i++){const d=d2(cs[i],p);if(d<bd){bd=d;bi=i}}cl[bi].push(p);}
+      cs=cl.map((g,i)=>g.length?mec(g):cs[i]);
+      const m=Math.max(...cs.map(c=>c.r));
+      if(Math.abs(prev-m)<1e-4)break;prev=m;
+    }
+    const m=Math.max(...cs.map(c=>c.r));
+    all.push({r:m,cs:cs.map(c=>({x:c.x,y:c.y}))});
+  }
+  all.sort((a,b)=>a.r-b.r);
+  for(const a of all.slice(0,2)){
+    const cs=shrink(a.cs,P),v=cover(cs,P);
+    if(!best||v<best.v)best={v,cs};
+  }
+  return best;
+}
+/* squared radius needed so that 3 discs at cs cover all of P */
+function cover(cs,P){let m=0;
+  for(const p of P){let d=1e18;
+    for(const c of cs){const e=(p.x-c.x)**2+(p.y-c.y)**2;if(e<d)d=e;}
+    if(d>m)m=d;}
+  return m;}
+/* one step: every uncovered point (beyond rt) pulls its nearest center toward itself */
+function violate(cs,P,rt){
+  const gx=[0,0,0],gy=[0,0,0],m=[0,0,0];let mx=0;
+  for(const p of P){
+    let bi=0,bd=1e18;
+    for(let i=0;i<3;i++){const e=(p.x-cs[i].x)**2+(p.y-cs[i].y)**2;if(e<bd){bd=e;bi=i}}
+    const d=Math.sqrt(bd);if(d>mx)mx=d;
+    if(d>rt){const w=(d-rt)/d;gx[bi]+=w*(p.x-cs[bi].x);gy[bi]+=w*(p.y-cs[bi].y);m[bi]++;}
+  }
+  return{mx,gx,gy,m};
+}
+/* continuation: try a smaller radius, move all 3 centers together until it fits */
+function shrink(cs,P){
+  cs=cs.map(c=>({x:c.x,y:c.y}));
+  let r=Math.sqrt(cover(cs,P)),f=0.02;
+  while(f>1e-3){
+    const rt=r*(1-f),t=cs.map(c=>({x:c.x,y:c.y}));
+    let ok=false;
+    for(let it=0;it<100;it++){
+      const s=violate(t,P,rt);
+      if(s.mx<=rt+0.02){ok=true;break;}
+      for(let i=0;i<3;i++)if(s.m[i]){t[i].x+=0.5*s.gx[i]/s.m[i];t[i].y+=0.5*s.gy[i]/s.m[i];}
+    }
+    if(ok){cs=t;r=Math.sqrt(cover(cs,P));}else f/=2;
+  }
+  return cs;
+}
+/* direct local search on f = max_p min_i |p-c_i| (6 variables) */
+function refine(cs,P){
+  cs=cs.map(c=>({x:c.x,y:c.y}));
+  let best=cover(cs,P),step=Math.sqrt(best)*0.1,fails=0;
+  for(let it=0;it<6000&&step>0.02;it++){
+    const i=Math.random()*3|0,a=Math.random()*6.2832,o={x:cs[i].x,y:cs[i].y};
+    cs[i].x+=Math.cos(a)*step;cs[i].y+=Math.sin(a)*step;
+    const v=cover(cs,P);
+    if(v<best){best=v;fails=0;}
+    else{cs[i].x=o.x;cs[i].y=o.y;if(++fails>150){step*=0.7;fails=0;}}
+  }
+  return cs;
+}
+
+/* ---------- drawing / confirm ---------- */
+function pos(e){const b=cv.getBoundingClientRect();return{x:e.clientX-b.left,y:e.clientY-b.top}}
+cv.addEventListener('pointerdown',e=>{
+  cv.setPointerCapture(e.pointerId);const p=pos(e);
+  if(mode==='draw'){stroke=[p];$('bConfirm').disabled=true;}
+  else if(mode==='play'&&!anim){
+    for(let i=circles.length-1;i>=0;i--)if(Math.hypot(p.x-circles[i].x,p.y-circles[i].y)<=R){
+      drag={i,dx:p.x-circles[i].x,dy:p.y-circles[i].y};
+      circles.push(circles.splice(i,1)[0]);drag.i=circles.length-1;break;}
+  }
+});
+cv.addEventListener('pointermove',e=>{
+  const p=pos(e);
+  if(mode==='draw'&&stroke.length&&e.buttons){
+    const l=stroke[stroke.length-1];if(Math.hypot(p.x-l.x,p.y-l.y)>3){stroke.push(p);draw();}
+  }else if(drag){circles[drag.i].x=p.x-drag.dx;circles[drag.i].y=p.y-drag.dy;draw();}
+});
+const up=()=>{
+  if(mode==='draw'&&stroke.length>=3)$('bConfirm').disabled=false;
+  drag=null;
+};
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+
+$('bConfirm').onclick=()=>{
+  poly=stroke.slice();
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of poly){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
+  inside=[];const s=3;
+  for(let y=y0;y<=y1;y+=s)for(let x=x0;x<=x1;x+=s)if(pip(x,y,poly))inside.push({x,y});
+  if(inside.length<20){info('도형이 너무 작습니다');poly=null;return;}
+  info('최적 반지름 계산 중…');
+  setTimeout(()=>{
+    // solver point set: subsampled interior + downsampled boundary
+    // dense boundary (2px spacing): the critical points are almost always here
+    const Pb=[];
+    for(let i=0;i<poly.length;i++){
+      const a=poly[i],b=poly[(i+1)%poly.length],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/2));
+      for(let t=0;t<n;t++)Pb.push({x:a.x+(b.x-a.x)*t/n,y:a.y+(b.y-a.y)*t/n});
+    }
+    const k=Math.ceil(inside.length/150),kb=Math.ceil(Pb.length/400);
+    const P=inside.filter((_,i)=>i%k===0).concat(Pb.filter((_,i)=>i%kb===0));
+    const sol=solve3(P);
+    solved=sol.cs;
+    R=Math.sqrt(cover(solved,inside.concat(Pb)))+0.5;   // exact need over all samples
+    mode='play';$('bSolve').disabled=false;$('bConfirm').disabled=true;
+    const xs=[.2,.5,.8];
+    circles=xs.map(f=>({x:W*f,y:H-R*0.7}));
+    draw();
+  },20);
+};
+$('bClear').onclick=()=>{stroke=[];poly=null;inside=[];circles=[];solved=null;anim=null;mode='draw';
+  $('bConfirm').disabled=true;$('bSolve').disabled=true;draw();};
+
+/* ---------- solve animation ---------- */
+const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+$('bSolve').onclick=()=>{
+  if(!solved||anim)return;
+  let bp=null,bd=1e18;
+  for(const pm of perms){let s=0;for(let i=0;i<3;i++)s+=d2(circles[i],solved[pm[i]]);if(s<bd){bd=s;bp=pm}}
+  const from=circles.map(c=>({x:c.x,y:c.y})),to=bp.map(i=>solved[i]);
+  const t0=performance.now(),D=900;
+  anim=true;
+  (function step(t){
+    let u=Math.min(1,(t-t0)/D);u=1-Math.pow(1-u,3);
+    circles.forEach((c,i)=>{c.x=from[i].x+(to[i].x-from[i].x)*u;c.y=from[i].y+(to[i].y-from[i].y)*u;});
+    draw();
+    if(t-t0<D)requestAnimationFrame(step);else anim=null;
+  })(t0);
+};
+
+/* ---------- render ---------- */
+function info(t){$('info').textContent=t}
+function path(c,P,close){c.beginPath();P.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));if(close)c.closePath();}
+function draw(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  if(!poly){
+    if(stroke.length){ctx.strokeStyle='#2f6fed';ctx.lineWidth=2.5;ctx.lineJoin='round';path(ctx,stroke,false);ctx.stroke();
+      ctx.setLineDash([5,5]);ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(stroke[stroke.length-1].x,stroke[stroke.length-1].y);ctx.lineTo(stroke[0].x,stroke[0].y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
+    return;
+  }
+  // uncovered region (red) via offscreen destination-out
+  mctx.setTransform(dpr,0,0,dpr,0,0);mctx.clearRect(0,0,W,H);
+  mctx.globalCompositeOperation='source-over';mctx.fillStyle='rgba(235,60,60,.75)';
+  path(mctx,poly,true);mctx.fill('evenodd');
+  mctx.globalCompositeOperation='destination-out';mctx.fillStyle='#000';
+  for(const c of circles){mctx.beginPath();mctx.arc(c.x,c.y,R,0,7);mctx.fill();}
+  ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(mask,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
+  // covered part of shape (green tint)
+  ctx.save();path(ctx,poly,true);ctx.clip('evenodd');
+  ctx.fillStyle='rgba(60,170,100,.45)';
+  for(const c of circles){ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.fill();}
+  ctx.restore();
+  ctx.strokeStyle='#222';ctx.lineWidth=2;ctx.lineJoin='round';path(ctx,poly,true);ctx.stroke();
+  // circles
+  circles.forEach((c,i)=>{
+    ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.strokeStyle=['#2f6fed','#e08a00','#8a3fd1'][i%3];ctx.lineWidth=2.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(c.x,c.y,3,0,7);ctx.fillStyle=ctx.strokeStyle;ctx.fill();
+  });
+  // uncovered percentage
+  let un=0;for(const p of inside){let ok=false;for(const c of circles){if((p.x-c.x)**2+(p.y-c.y)**2<=R*R){ok=true;break}}if(!ok)un++;}
+  const pu=un/inside.length*100;
+  info(`r = ${R.toFixed(1)}px · 덮음 ${(100-pu).toFixed(1)}% · 못 덮음 ${pu.toFixed(1)}%`+(pu===0?' ✔':''));
+}
+resize();
+addEventListener('load',resize);
+if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementById('wrap'));
+</script>
+</body>
+</html>
