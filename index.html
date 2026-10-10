@@ -137,7 +137,7 @@ function mec(P){
 /* ================= 3-center solver ================= */
 function solve3(P){
   let best=null;const all=[];
-  for(let t=0;t<10;t++){
+  for(let t=0;t<12;t++){
     let cs=[P[Math.random()*P.length|0]];
     while(cs.length<3){
       let far=null,fd=-1;
@@ -159,7 +159,7 @@ function solve3(P){
     all.push({r:m,cs:cs.map(c=>({x:c.x,y:c.y}))});
   }
   all.sort((a,b)=>a.r-b.r);
-  for(const a of all.slice(0,2)){
+  for(const a of all.slice(0,4)){
     const cs=shrink(a.cs,P),v=cover(cs,P);
     if(!best||v<best.v)best={v,cs};
   }
@@ -170,28 +170,48 @@ function cover(cs,P){let m=0;
     for(const c of cs){const e=(p.x-c.x)**2+(p.y-c.y)**2;if(e<d)d=e;}
     if(d>m)m=d;}
   return m;}
-function violate(cs,P,rt){
-  const gx=[0,0,0],gy=[0,0,0],m=[0,0,0];let mx=0;
-  for(const p of P){
-    let bi=0,bd=1e18;
-    for(let i=0;i<3;i++){const e=(p.x-cs[i].x)**2+(p.y-cs[i].y)**2;if(e<bd){bd=e;bi=i}}
-    const d=Math.sqrt(bd);if(d>mx)mx=d;
-    if(d>rt){const w=(d-rt)/d;gx[bi]+=w*(p.x-cs[bi].x);gy[bi]+=w*(p.y-cs[bi].y);m[bi]++;}
-  }
-  return{mx,gx,gy,m};
-}
-function shrink(cs,P){
-  cs=cs.map(c=>({x:c.x,y:c.y}));
-  let r=Math.sqrt(cover(cs,P)),f=0.02;
-  while(f>3e-4){
-    const rt=r*(1-f),t=cs.map(c=>({x:c.x,y:c.y}));
-    let ok=false;
-    for(let it=0;it<150;it++){
-      const s=violate(t,P,rt);
-      if(s.mx<=rt+0.02){ok=true;break;}
-      for(let i=0;i<3;i++)if(s.m[i]){t[i].x+=0.5*s.gx[i]/s.m[i];t[i].y+=0.5*s.gy[i]/s.m[i];}
+/* Fast shrink: lower the target radius step by step; every point farther than the target
+   pulls its nearest center toward itself (all 3 centers move together). Typed arrays, early fail. */
+function shrink(cs,P,fmin=3e-4){
+  const n=P.length,px=new Float64Array(n),py=new Float64Array(n);
+  for(let i=0;i<n;i++){px[i]=P[i].x;py[i]=P[i].y;}
+  const cx=Float64Array.from(cs,c=>c.x),cy=Float64Array.from(cs,c=>c.y);
+  const tx=new Float64Array(3),ty=new Float64Array(3),gx=new Float64Array(3),gy=new Float64Array(3),m=new Int32Array(3);
+  const cov=(x,y)=>{let mx=0;for(let i=0;i<n;i++){const a=px[i],b=py[i];
+    let d=(a-x[0])**2+(b-y[0])**2,e=(a-x[1])**2+(b-y[1])**2;if(e<d)d=e;e=(a-x[2])**2+(b-y[2])**2;if(e<d)d=e;if(d>mx)mx=d;}return Math.sqrt(mx);};
+  let r=cov(cx,cy),f=0.02;
+  while(f>fmin){
+    const rt=r*(1-f);tx.set(cx);ty.set(cy);
+    let ok=false,mark=1e18;
+    for(let it=0;it<120;it++){
+      gx.fill(0);gy.fill(0);m.fill(0);let mx=0;
+      for(let i=0;i<n;i++){const a=px[i],b=py[i];
+        let bi=0,bd=(a-tx[0])**2+(b-ty[0])**2,e=(a-tx[1])**2+(b-ty[1])**2;
+        if(e<bd){bd=e;bi=1}e=(a-tx[2])**2+(b-ty[2])**2;if(e<bd){bd=e;bi=2}
+        const d=Math.sqrt(bd);if(d>mx)mx=d;
+        if(d>rt){const w=(d-rt)/d;gx[bi]+=w*(a-tx[bi]);gy[bi]+=w*(b-ty[bi]);m[bi]++;}
+      }
+      if(mx<=rt+0.02){ok=true;break;}
+      if(it%15===14){if(mark-mx<2e-3*rt)break;mark=mx;}   // stalled -> fail early
+      for(let i=0;i<3;i++)if(m[i]){tx[i]+=0.5*gx[i]/m[i];ty[i]+=0.5*gy[i]/m[i];}
     }
-    if(ok){cs=t;r=Math.sqrt(cover(cs,P));}else f/=2;
+    if(ok){cx.set(tx);cy.set(ty);r=cov(cx,cy);}else f/=2;
+  }
+  return [0,1,2].map(i=>({x:cx[i],y:cy[i]}));
+}
+/* The solver works on a subsample. Find full-set points it left uncovered, add the worst
+   ones to the working set, and shrink again (constraint generation). */
+function refineFull(cs,P,full){
+  P=P.slice();
+  for(let it=0;it<4;it++){
+    const thr=cover(cs,P)*(1+2e-4),bad=[];
+    for(const p of full){let d=1e18;
+      for(const c of cs){const e=(p.x-c.x)**2+(p.y-c.y)**2;if(e<d)d=e;}
+      if(d>thr)bad.push([d,p]);}
+    if(!bad.length)break;
+    bad.sort((a,b)=>b[0]-a[0]);
+    for(const b of bad.slice(0,150))P.push(b[1]);
+    cs=shrink(cs,P);
   }
   return cs;
 }
@@ -234,8 +254,9 @@ function prepare(slack){
   }
   const k=Math.ceil(inside.length/150),kb=Math.ceil(Pb.length/400);
   const P=inside.filter((_,i)=>i%k===0).concat(Pb.filter((_,i)=>i%kb===0));
-  solved=solve3(P).cs;
-  R=Math.sqrt(cover(solved,inside.concat(Pb)))+0.25;
+  const full=inside.concat(Pb);
+  solved=refineFull(solve3(P).cs,P,full);
+  R=Math.sqrt(cover(solved,full))+0.05;
   if(uncoveredPx(solved,R)>0){                // pixel check: grow with doubling steps, then bisect
     let lo=R,step=0.25,hi=R+step;
     while(uncoveredPx(solved,hi)>0&&step<R){lo=hi;step*=2;hi+=step;}
