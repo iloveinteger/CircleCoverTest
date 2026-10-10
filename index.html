@@ -3,45 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3원 덮기 퍼즐</title>
+<title>3원 덮기</title>
 <style>
-  :root{--bg:#f7f7f5;--fg:#1d1d1b;--card:#fff;--line:#d8d8d2;--acc:#2f6fed}
-  @media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#222;--line:#444;--acc:#6b9bff}}
+  :root{--bg:#f7f7f5;--fg:#1d1d1b;--card:#fff;--line:#d8d8d2;--acc:#2f6fed;--mut:#777}
+  @media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#222;--line:#444;--acc:#6b9bff;--mut:#999}}
   html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
   body{display:flex;flex-direction:column}
   #bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px}
-  button{font:inherit;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg)}
+  button{font:inherit;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer}
   button.p{background:var(--acc);color:#fff;border-color:var(--acc)}
   button:disabled{opacity:.4}
   #info{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px}
+  #tt{font-weight:700;font-variant-numeric:tabular-nums;min-width:48px}
+  #tbar{height:6px;margin:0 10px 8px;background:var(--line);border-radius:3px;overflow:hidden}
+  #tfill{display:block;height:100%;width:100%;background:var(--acc)}
   #wrap{flex:1;min-height:200px;margin:0 10px 10px;position:relative}
   canvas{position:absolute;left:0;top:0;width:100%;height:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
+  .ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:5;text-align:center;padding:20px}
+  .hidden{display:none!important}
+  .ov h1{margin:0 0 8px;font-size:28px}
+  .card{width:min(320px,86vw);padding:16px;text-align:left}
+  .card b{display:block;font-size:17px;margin-bottom:4px}
+  .card span{font-size:13px;color:var(--mut)}
+  #toast{position:fixed;left:0;right:0;top:40%;text-align:center;font-size:36px;font-weight:800;pointer-events:none;opacity:0;transition:opacity .2s;z-index:4;color:var(--acc)}
+  #toast.show{opacity:1}
 </style>
 </head>
 <body>
 <div id="bar">
+  <button id="bMenu">☰ 메뉴</button>
   <button id="bConfirm" disabled>폐곡선 확정</button>
   <button id="bClear">다시 그리기</button>
   <button id="bSolve" class="p" disabled>Solve</button>
-  <div id="info">캔버스에 도형을 자유롭게 그리세요</div>
+  <button id="bNext">다음 도형</button>
+  <div id="tt" class="hidden"></div>
+  <div id="info"></div>
 </div>
+<div id="tbar" class="hidden"><i id="tfill"></i></div>
 <div id="wrap"><canvas id="cv"></canvas></div>
+
+<div id="menu" class="ov">
+  <h1>3원 덮기</h1>
+  <button class="card" id="mFree"><b>Freehand</b><span>직접 도형을 그리고 최소 반지름 원 3개로 덮어보기</span></button>
+  <button class="card" id="mRush"><b>Puzzle Rush</b><span>제한시간 안에 100% 덮으면 다음 단계. 갈수록 빨라지고 빡빡해집니다</span><span id="best" style="display:block;margin-top:6px"></span></button>
+  <button class="card" id="mZen"><b>Zen</b><span>시간제한 없이 랜덤 도형을 느긋하게</span></button>
+</div>
+<div id="over" class="ov hidden">
+  <h1>시간 종료</h1>
+  <div id="overTxt" style="font-size:18px;line-height:1.6"></div>
+  <button class="p" id="oRetry">다시 도전</button>
+  <button id="oMenu">메뉴</button>
+</div>
+<div id="toast"></div>
+
 <script>
 const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 const $=id=>document.getElementById(id);
 let W=0,H=0,dpr=1;
-let stroke=[],poly=null,inside=[],R=0,circles=[],solved=null,mode='draw',drag=null,anim=null;
+let stroke=[],poly=null,inside=[],R=0,circles=[],solved=null,drag=null,anim=null;
+let mode='free',phase='idle',level=1,score=0,deadline=0,limit=0,timerId=null,cleared=false;
 const mask=document.createElement('canvas'),mctx=mask.getContext('2d');
 
 function resize(){
   dpr=window.devicePixelRatio||1;
   const r=cv.getBoundingClientRect();W=r.width;H=r.height;
   cv.width=W*dpr;cv.height=H*dpr;mask.width=cv.width;mask.height=cv.height;
+  if(poly)setupQ();
   draw();
 }
 addEventListener('resize',resize);
 
-/* ---------- geometry ---------- */
+/* ================= geometry ================= */
 function pip(x,y,P){let c=false;for(let i=0,j=P.length-1;i<P.length;j=i++){
   const a=P[i],b=P[j];
   if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)c=!c;}return c;}
@@ -53,7 +85,7 @@ function c3(a,b,c){
   const x=(D*E-B*F)/G,y=(A*F-C*E)/G;return{x,y,r:Math.sqrt((x-a.x)**2+(y-a.y)**2)};
 }
 const inC=(c,p)=>c&&Math.sqrt((p.x-c.x)**2+(p.y-c.y)**2)<=c.r+1e-7;
-/* Welzl (iterative, expected O(n)) : minimum enclosing circle */
+/* Welzl: minimum enclosing circle */
 function mec(P){
   P=P.slice();for(let i=P.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[P[i],P[j]]=[P[j],P[i]];}
   let c=null;
@@ -67,11 +99,10 @@ function mec(P){
   return c||{x:0,y:0,r:0};
 }
 
-/* ---------- 3-center solver: k-center restarts + per-cluster MEC refinement ---------- */
+/* ================= 3-center solver ================= */
 function solve3(P){
   let best=null;const all=[];
   for(let t=0;t<12;t++){
-    // farthest-point style random init
     let cs=[P[Math.random()*P.length|0]];
     while(cs.length<3){
       let far=null,fd=-1;
@@ -99,13 +130,11 @@ function solve3(P){
   }
   return best;
 }
-/* squared radius needed so that 3 discs at cs cover all of P */
 function cover(cs,P){let m=0;
   for(const p of P){let d=1e18;
     for(const c of cs){const e=(p.x-c.x)**2+(p.y-c.y)**2;if(e<d)d=e;}
     if(d>m)m=d;}
   return m;}
-/* one step: every uncovered point (beyond rt) pulls its nearest center toward itself */
 function violate(cs,P,rt){
   const gx=[0,0,0],gy=[0,0,0],m=[0,0,0];let mx=0;
   for(const p of P){
@@ -116,7 +145,6 @@ function violate(cs,P,rt){
   }
   return{mx,gx,gy,m};
 }
-/* continuation: try a smaller radius, move all 3 centers together until it fits */
 function shrink(cs,P){
   cs=cs.map(c=>({x:c.x,y:c.y}));
   let r=Math.sqrt(cover(cs,P)),f=0.02;
@@ -132,26 +160,79 @@ function shrink(cs,P){
   }
   return cs;
 }
-/* direct local search on f = max_p min_i |p-c_i| (6 variables) */
-function refine(cs,P){
-  cs=cs.map(c=>({x:c.x,y:c.y}));
-  let best=cover(cs,P),step=Math.sqrt(best)*0.1,fails=0;
-  for(let it=0;it<6000&&step>0.02;it++){
-    const i=Math.random()*3|0,a=Math.random()*6.2832,o={x:cs[i].x,y:cs[i].y};
-    cs[i].x+=Math.cos(a)*step;cs[i].y+=Math.sin(a)*step;
-    const v=cover(cs,P);
-    if(v<best){best=v;fails=0;}
-    else{cs[i].x=o.x;cs[i].y=o.y;if(++fails>150){step*=0.7;fails=0;}}
-  }
-  return cs;
+
+/* ================= pixel-based coverage measure ================= */
+const Q=0.5,mc=document.createElement('canvas');let qctx=null,totalPx=1;
+function setupQ(){
+  mc.width=Math.ceil(W*Q);mc.height=Math.ceil(H*Q);
+  qctx=mc.getContext('2d',{willReadFrequently:true});
+  qctx.setTransform(Q,0,0,Q,0,0);qctx.clearRect(0,0,W,H);
+  qctx.fillStyle='#f00';path(qctx,poly,true);qctx.fill('evenodd');
+  totalPx=Math.max(1,countA());
+}
+function countA(){
+  const d=qctx.getImageData(0,0,mc.width,mc.height).data;let n=0;
+  for(let i=3;i<d.length;i+=4)if(d[i]>100)n++;
+  return n;
+}
+function uncoveredPx(cs,r){
+  qctx.setTransform(Q,0,0,Q,0,0);qctx.globalCompositeOperation='source-over';
+  qctx.clearRect(0,0,W,H);qctx.fillStyle='#f00';path(qctx,poly,true);qctx.fill('evenodd');
+  qctx.globalCompositeOperation='destination-out';qctx.fillStyle='#000';
+  for(const c of cs){qctx.beginPath();qctx.arc(c.x,c.y,r,0,7);qctx.fill();}
+  qctx.globalCompositeOperation='source-over';
+  return countA();
 }
 
-/* ---------- drawing / confirm ---------- */
+/* ================= prepare: from poly -> optimal circles (slack = extra radius ratio) ================= */
+function prepare(slack){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of poly){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
+  inside=[];const s=3;
+  for(let y=y0;y<=y1;y+=s)for(let x=x0;x<=x1;x+=s)if(pip(x,y,poly))inside.push({x,y});
+  if(inside.length<20){poly=null;return false;}
+  const Pb=[];
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i],b=poly[(i+1)%poly.length],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/2));
+    for(let t=0;t<n;t++)Pb.push({x:a.x+(b.x-a.x)*t/n,y:a.y+(b.y-a.y)*t/n});
+  }
+  const k=Math.ceil(inside.length/150),kb=Math.ceil(Pb.length/400);
+  const P=inside.filter((_,i)=>i%k===0).concat(Pb.filter((_,i)=>i%kb===0));
+  solved=solve3(P).cs;
+  R=Math.sqrt(cover(solved,inside.concat(Pb)))+0.5;
+  setupQ();
+  for(let n=0;n<60&&uncoveredPx(solved,R)>0;n++)R+=0.5;   // grow until no uncovered pixel
+  R*=1+slack;
+  circles=[.2,.5,.8].map(f=>({x:W*f,y:H-R*0.6}));
+  drag=null;anim=null;
+  return true;
+}
+
+/* ================= random shapes ================= */
+function randomShape(lv){
+  const m=Math.min(6,2+(lv>>1)),amp=Math.min(0.7,0.25+0.04*lv);
+  const ks=[],ph=[],am=[];
+  for(let k=1;k<=m+1;k++){ks.push(k);ph.push(Math.random()*6.283);am.push(Math.random()*amp/Math.pow(k,0.6));}
+  const sx=0.7+Math.random()*0.8,rot=Math.random()*6.283,N=140,pts=[];
+  for(let i=0;i<N;i++){
+    const a=i/N*6.283;let r=1;
+    for(let j=0;j<ks.length;j++)r+=am[j]*Math.cos(ks[j]*a+ph[j]);
+    r=Math.max(0.25,r);
+    const x=r*Math.cos(a)*sx,y=r*Math.sin(a);
+    pts.push({x:x*Math.cos(rot)-y*Math.sin(rot),y:x*Math.sin(rot)+y*Math.cos(rot)});
+  }
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of pts){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
+  const sc=Math.min(W*0.84/(x1-x0),H*0.6/(y1-y0)),cx=(x0+x1)/2,cy=(y0+y1)/2;
+  return pts.map(p=>({x:W/2+(p.x-cx)*sc,y:H*0.44+(p.y-cy)*sc}));
+}
+
+/* ================= input ================= */
 function pos(e){const b=cv.getBoundingClientRect();return{x:e.clientX-b.left,y:e.clientY-b.top}}
 cv.addEventListener('pointerdown',e=>{
   cv.setPointerCapture(e.pointerId);const p=pos(e);
-  if(mode==='draw'){stroke=[p];$('bConfirm').disabled=true;}
-  else if(mode==='play'&&!anim){
+  if(phase==='draw'){stroke=[p];$('bConfirm').disabled=true;}
+  else if(phase==='play'&&!anim){
     for(let i=circles.length-1;i>=0;i--)if(Math.hypot(p.x-circles[i].x,p.y-circles[i].y)<=R){
       drag={i,dx:p.x-circles[i].x,dy:p.y-circles[i].y};
       circles.push(circles.splice(i,1)[0]);drag.i=circles.length-1;break;}
@@ -159,50 +240,102 @@ cv.addEventListener('pointerdown',e=>{
 });
 cv.addEventListener('pointermove',e=>{
   const p=pos(e);
-  if(mode==='draw'&&stroke.length&&e.buttons){
+  if(phase==='draw'&&stroke.length&&e.buttons){
     const l=stroke[stroke.length-1];if(Math.hypot(p.x-l.x,p.y-l.y)>3){stroke.push(p);draw();}
-  }else if(drag){circles[drag.i].x=p.x-drag.dx;circles[drag.i].y=p.y-drag.dy;draw();}
+  }else if(drag&&phase==='play'){circles[drag.i].x=p.x-drag.dx;circles[drag.i].y=p.y-drag.dy;draw();}
 });
-const up=()=>{
-  if(mode==='draw'&&stroke.length>=3)$('bConfirm').disabled=false;
-  drag=null;
-};
+const up=()=>{if(phase==='draw'&&stroke.length>=3)$('bConfirm').disabled=false;drag=null;};
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
 
+/* ================= modes ================= */
+const best=()=>{try{return+localStorage.getItem('rushBest')||0}catch(e){return 0}};
+const setBest=v=>{try{localStorage.setItem('rushBest',v)}catch(e){}};
+const show=(id,on)=>$(id).classList.toggle('hidden',!on);
+function toast(t,ms){const el=$('toast');el.textContent=t;el.classList.add('show');if(ms)setTimeout(()=>el.classList.remove('show'),ms);}
+function stopTimer(){clearInterval(timerId);timerId=null;}
+function resetState(){
+  stopTimer();stroke=[];poly=null;inside=[];circles=[];solved=null;anim=null;drag=null;cleared=false;
+  $('toast').classList.remove('show');$('bConfirm').disabled=true;$('bSolve').disabled=true;
+}
+function openMenu(){
+  stopTimer();phase='idle';show('over',false);show('menu',true);
+  $('best').textContent=best()?`최고 기록: ${best()}단계`:'';
+}
+function enterMode(m){
+  mode=m;resetState();show('menu',false);show('over',false);
+  show('bConfirm',m==='free');show('bClear',m==='free');
+  show('bSolve',m!=='rush');show('bNext',m==='zen');
+  show('tt',m==='rush');show('tbar',m==='rush');
+  resize();
+  if(m==='free'){phase='draw';info('캔버스에 도형을 자유롭게 그리세요');draw();}
+  else if(m==='rush'){level=1;score=0;startLevel();}
+  else{nextZen();}
+}
+$('mFree').onclick=()=>enterMode('free');
+$('mRush').onclick=()=>enterMode('rush');
+$('mZen').onclick=()=>enterMode('zen');
+$('bMenu').onclick=openMenu;
+$('oRetry').onclick=()=>enterMode('rush');
+$('oMenu').onclick=openMenu;
+
+/* ---- free ---- */
 $('bConfirm').onclick=()=>{
-  poly=stroke.slice();
-  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
-  for(const p of poly){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
-  inside=[];const s=3;
-  for(let y=y0;y<=y1;y+=s)for(let x=x0;x<=x1;x+=s)if(pip(x,y,poly))inside.push({x,y});
-  if(inside.length<20){info('도형이 너무 작습니다');poly=null;return;}
-  info('최적 반지름 계산 중…');
+  poly=stroke.slice();phase='wait';$('bConfirm').disabled=true;info('최적 반지름 계산 중…');
   setTimeout(()=>{
-    // solver point set: subsampled interior + downsampled boundary
-    // dense boundary (2px spacing): the critical points are almost always here
-    const Pb=[];
-    for(let i=0;i<poly.length;i++){
-      const a=poly[i],b=poly[(i+1)%poly.length],n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.y-a.y)/2));
-      for(let t=0;t<n;t++)Pb.push({x:a.x+(b.x-a.x)*t/n,y:a.y+(b.y-a.y)*t/n});
-    }
-    const k=Math.ceil(inside.length/150),kb=Math.ceil(Pb.length/400);
-    const P=inside.filter((_,i)=>i%k===0).concat(Pb.filter((_,i)=>i%kb===0));
-    const sol=solve3(P);
-    solved=sol.cs;
-    R=Math.sqrt(cover(solved,inside.concat(Pb)))+0.5;   // exact need over all samples
-    mode='play';$('bSolve').disabled=false;$('bConfirm').disabled=true;
-    const xs=[.2,.5,.8];
-    circles=xs.map(f=>({x:W*f,y:H-R*0.7}));
-    draw();
+    if(!prepare(0)){info('도형이 너무 작습니다');phase='draw';return;}
+    phase='play';$('bSolve').disabled=false;draw();
   },20);
 };
-$('bClear').onclick=()=>{stroke=[];poly=null;inside=[];circles=[];solved=null;anim=null;mode='draw';
-  $('bConfirm').disabled=true;$('bSolve').disabled=true;draw();};
+$('bClear').onclick=()=>{resetState();phase='draw';info('캔버스에 도형을 자유롭게 그리세요');draw();};
 
-/* ---------- solve animation ---------- */
+/* ---- zen ---- */
+function nextZen(){
+  phase='wait';info('도형 생성 중…');$('bSolve').disabled=true;
+  setTimeout(()=>{
+    do{poly=randomShape(1+Math.random()*8|0);}while(!prepare(0.08));
+    phase='play';cleared=false;$('bSolve').disabled=false;draw();
+  },20);
+}
+$('bNext').onclick=()=>{if(phase==='play'||phase==='wait')nextZen();};
+
+/* ---- rush ---- */
+const timeFor=l=>Math.max(7,32-2.5*(l-1));
+const slackFor=l=>Math.max(0.04,0.12-0.01*(l-1));
+function startLevel(){
+  stopTimer();phase='wait';cleared=false;poly=null;circles=[];draw();
+  toast(`LEVEL ${level}`);$('tt').textContent='';$('tfill').style.width='100%';
+  setTimeout(()=>{
+    do{poly=randomShape(level);}while(!prepare(slackFor(level)));
+    draw();
+    setTimeout(()=>{
+      $('toast').classList.remove('show');
+      limit=timeFor(level);deadline=performance.now()+limit*1000;phase='play';
+      timerId=setInterval(tick,50);tick();
+    },600);
+  },60);
+}
+function tick(){
+  const left=Math.max(0,deadline-performance.now());
+  $('tt').textContent=(left/1000).toFixed(1)+'s';
+  $('tfill').style.width=(left/(limit*1000)*100)+'%';
+  if(left<=0&&phase==='play')gameOver();
+}
+function levelClear(){
+  cleared=true;stopTimer();phase='wait';score=level;
+  toast('CLEAR!',700);level++;
+  setTimeout(startLevel,900);
+}
+function gameOver(){
+  stopTimer();phase='over';drag=null;
+  const nb=score>best();if(nb)setBest(score);
+  $('overTxt').innerHTML=`${score}단계 클리어<br>최고 기록 ${Math.max(score,best())}단계`+(nb&&score>0?'<br>🎉 신기록!':'');
+  show('over',true);
+}
+
+/* ---- solve (free / zen) ---- */
 const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
 $('bSolve').onclick=()=>{
-  if(!solved||anim)return;
+  if(!solved||anim||phase!=='play')return;
   let bp=null,bd=1e18;
   for(const pm of perms){let s=0;for(let i=0;i<3;i++)s+=d2(circles[i],solved[pm[i]]);if(s<bd){bd=s;bp=pm}}
   const from=circles.map(c=>({x:c.x,y:c.y})),to=bp.map(i=>solved[i]);
@@ -216,39 +349,39 @@ $('bSolve').onclick=()=>{
   })(t0);
 };
 
-/* ---------- render ---------- */
+/* ================= render ================= */
 function info(t){$('info').textContent=t}
 function path(c,P,close){c.beginPath();P.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));if(close)c.closePath();}
 function draw(){
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
   if(!poly){
-    if(stroke.length){ctx.strokeStyle='#2f6fed';ctx.lineWidth=2.5;ctx.lineJoin='round';path(ctx,stroke,false);ctx.stroke();
+    if(stroke.length&&phase==='draw'){ctx.strokeStyle='#2f6fed';ctx.lineWidth=2.5;ctx.lineJoin='round';path(ctx,stroke,false);ctx.stroke();
       ctx.setLineDash([5,5]);ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(stroke[stroke.length-1].x,stroke[stroke.length-1].y);ctx.lineTo(stroke[0].x,stroke[0].y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;}
     return;
   }
-  // uncovered region (red) via offscreen destination-out
   mctx.setTransform(dpr,0,0,dpr,0,0);mctx.clearRect(0,0,W,H);
   mctx.globalCompositeOperation='source-over';mctx.fillStyle='rgba(235,60,60,.75)';
   path(mctx,poly,true);mctx.fill('evenodd');
   mctx.globalCompositeOperation='destination-out';mctx.fillStyle='#000';
   for(const c of circles){mctx.beginPath();mctx.arc(c.x,c.y,R,0,7);mctx.fill();}
   ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(mask,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
-  // covered part of shape (green tint)
   ctx.save();path(ctx,poly,true);ctx.clip('evenodd');
   ctx.fillStyle='rgba(60,170,100,.45)';
   for(const c of circles){ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.fill();}
   ctx.restore();
   ctx.strokeStyle='#222';ctx.lineWidth=2;ctx.lineJoin='round';path(ctx,poly,true);ctx.stroke();
-  // circles
   circles.forEach((c,i)=>{
     ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.strokeStyle=['#2f6fed','#e08a00','#8a3fd1'][i%3];ctx.lineWidth=2.5;ctx.stroke();
     ctx.beginPath();ctx.arc(c.x,c.y,3,0,7);ctx.fillStyle=ctx.strokeStyle;ctx.fill();
   });
-  // uncovered percentage
-  let un=0;for(const p of inside){let ok=false;for(const c of circles){if((p.x-c.x)**2+(p.y-c.y)**2<=R*R){ok=true;break}}if(!ok)un++;}
-  const pu=un/inside.length*100;
-  info(`r = ${R.toFixed(1)}px · 덮음 ${(100-pu).toFixed(1)}% · 못 덮음 ${pu.toFixed(1)}%`+(pu===0?' ✔':''));
+  if(phase==='draw')return;
+  const un=uncoveredPx(circles,R);
+  const pu=un>0?Math.max(0.1,un/totalPx*100):0;
+  const pre=mode==='rush'?`Lv ${level} · `:'';
+  info(`${pre}r = ${R.toFixed(1)}px · 덮음 ${(100-pu).toFixed(1)}%`+(un===0?' ✔':''));
+  if(mode==='rush'&&phase==='play'&&un===0&&!cleared&&!anim)levelClear();
 }
+openMenu();
 resize();
 addEventListener('load',resize);
 if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementById('wrap'));
