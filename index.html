@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3-Circle Cover</title>
 <style>
-  :root{--bg:#f4f4f8;--fg:#17171c;--card:#fff;--line:#e3e3ea;--acc:#4f46e5;--acc2:#7c3aed;--mut:#7a7a88;--ok:#16a34a;--shadow:0 6px 24px rgba(30,30,60,.08)}
-  @media (prefers-color-scheme:dark){:root{--bg:#0f0f14;--fg:#f1f1f6;--card:#1a1a22;--line:#2b2b36;--acc:#818cf8;--acc2:#a78bfa;--mut:#9a9aab;--ok:#4ade80;--shadow:0 6px 24px rgba(0,0,0,.4)}}
+  :root{--bg:#f4f4f8;--fg:#17171c;--card:#fff;--line:#e3e3ea;--acc:#4f46e5;--mut:#7a7a88;--on:#fff;--shadow:0 6px 24px rgba(30,30,60,.08)}
+  @media (prefers-color-scheme:dark){:root{--bg:#0f0f14;--fg:#f1f1f6;--card:#1a1a22;--line:#2b2b36;--acc:#818cf8;--mut:#9a9aab;--on:#0f0f14;--shadow:0 6px 24px rgba(0,0,0,.4)}}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
   body{display:flex;flex-direction:column;max-width:900px;margin:0 auto}
@@ -20,7 +20,7 @@
   .chip{padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
   #tt{min-width:64px;text-align:center;color:var(--acc)}
   #tbar{height:5px;margin:0 16px 8px;background:var(--line);border-radius:3px;overflow:hidden}
-  #tfill{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:3px}
+  #tfill{display:block;height:100%;width:100%;background:var(--acc);border-radius:3px}
 
   #wrap{flex:1;min-height:200px;margin:0 12px;position:relative;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow);
         background:var(--card);background-image:radial-gradient(var(--line) 1px,transparent 1px);background-size:22px 22px}
@@ -28,21 +28,21 @@
   #stats{position:absolute;top:12px;left:12px;display:flex;gap:6px;align-items:center;pointer-events:none}
   .pill{padding:6px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
   .pill.sub{font-weight:500;color:var(--mut)}
-  #cov.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+  #cov.ok{background:var(--acc);border-color:var(--acc);color:var(--on)}
   #hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:var(--fg);color:var(--bg);font-size:13px;white-space:nowrap;pointer-events:none;opacity:.9}
 
   #dock{display:flex;gap:10px;justify-content:center;padding:12px 12px max(16px,env(safe-area-inset-bottom))}
   .btn{flex:1;max-width:220px;padding:13px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:15px;box-shadow:var(--shadow);transition:transform .08s,opacity .15s}
   .btn:active{transform:scale(.97)}
-  .btn.p{background:linear-gradient(135deg,var(--acc),var(--acc2));border-color:transparent;color:#fff}
+  .btn.p{background:var(--acc);border-color:var(--acc);color:var(--on)}
   .btn:disabled{opacity:.4;box-shadow:none}
 
   .ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:5;text-align:center;padding:24px}
-  #menu h1{margin:0;font-size:32px;letter-spacing:-.02em;background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  #menu h1{margin:0;font-size:32px;letter-spacing:-.02em;color:var(--fg)}
   #menu .sub{margin:0 0 14px;color:var(--mut);font-size:15px}
   .card{width:min(360px,100%);display:flex;gap:14px;align-items:center;padding:16px;text-align:left;border-radius:18px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow);transition:transform .1s}
   .card:active{transform:scale(.98)}
-  .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:22px;font-style:normal;background:var(--bg);flex:none}
+  .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-style:normal;background:var(--bg);color:var(--acc);flex:none}
   .card b{display:block;font-size:17px;margin-bottom:3px}
   .card span{font-size:13px;color:var(--mut);line-height:1.4}
   .badge{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:999px;background:var(--bg);font-weight:600;color:var(--acc)!important}
@@ -57,7 +57,7 @@
 </head>
 <body>
 <header id="top">
-  <button id="bMenu" class="ib" aria-label="Back to menu">←</button>
+  <button id="bMenu" class="ib" aria-label="Back to menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
   <div id="title"></div>
   <div class="chips"><span id="lv" class="chip hidden"></span><span id="tt" class="chip hidden"></span></div>
 </header>
@@ -68,18 +68,18 @@
   <div id="hint" class="hidden"></div>
 </div>
 <div id="dock">
-  <button id="bClear" class="btn">↺ Redraw</button>
-  <button id="bConfirm" class="btn p" disabled>✓ Close shape</button>
-  <button id="bNext" class="btn">→ Next shape</button>
-  <button id="bSolve" class="btn p" disabled>✦ Solve</button>
+  <button id="bClear" class="btn">Redraw</button>
+  <button id="bConfirm" class="btn p" disabled>Close shape</button>
+  <button id="bNext" class="btn">Next shape</button>
+  <button id="bSolve" class="btn p" disabled>Solve</button>
 </div>
 
 <div id="menu" class="ov">
   <h1>3-Circle Cover</h1>
   <p class="sub">Cover any shape with three equal circles</p>
-  <button class="card" id="mFree"><i class="ic">✏️</i><div><b>Freehand</b><span>Draw your own shape and find the smallest radius that covers it</span></div></button>
-  <button class="card" id="mRush"><i class="ic">⚡</i><div><b>Puzzle Rush</b><span>Cover 100% before time runs out. Every level is faster and tighter</span><span id="best" class="badge"></span></div></button>
-  <button class="card" id="mZen"><i class="ic">🌿</i><div><b>Zen</b><span>Random shapes, no timer. Relax and take your time</span></div></button>
+  <button class="card" id="mFree"><i class="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></i><div><b>Freehand</b><span>Draw your own shape and find the smallest radius that covers it</span></div></button>
+  <button class="card" id="mRush"><i class="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></svg></i><div><b>Puzzle Rush</b><span>Cover 100% before time runs out. Every level is faster and tighter</span><span id="best" class="badge"></span></div></button>
+  <button class="card" id="mZen"><i class="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-9 5-14 14-14 0 9-5 14-14 14z"/><path d="M5 19l8-8"/></svg></i><div><b>Zen</b><span>Random shapes, no timer. Relax and take your time</span></div></button>
 </div>
 <div id="over" class="ov hidden">
   <h1>Time's up</h1>
@@ -369,7 +369,7 @@ function levelClear(){
 function gameOver(){
   stopTimer();phase='over';drag=null;
   const nb=score>best();if(nb)setBest(score);
-  $('overTxt').innerHTML=`Levels cleared: ${score}<br>Best: ${Math.max(score,best())}`+(nb&&score>0?'<br>🎉 New record!':'');
+  $('overTxt').innerHTML=`Levels cleared: ${score}<br>Best: ${Math.max(score,best())}`+(nb&&score>0?'<br>New record':'');
   toast('Here is a solution',1600);
   slideToSolved(()=>show('over',true));
 }
@@ -396,6 +396,7 @@ $('bSolve').onclick=()=>{
 
 /* ================= render ================= */
 function info(t){const h=$('hint');h.textContent=t;h.classList.toggle('hidden',!t);}
+const rgba=(h,a)=>{h=h.replace('#','');if(h.length===3)h=h.replace(/./g,'$&$&');return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`};
 const FG=()=>getComputedStyle(document.documentElement).getPropertyValue('--fg').trim()||'#222';
 const ACC=()=>getComputedStyle(document.documentElement).getPropertyValue('--acc').trim()||'#4f46e5';
 function path(c,P,close){c.beginPath();P.forEach((p,i)=>i?c.lineTo(p.x,p.y):c.moveTo(p.x,p.y));if(close)c.closePath();}
@@ -407,25 +408,24 @@ function draw(){
     return;
   }
   mctx.setTransform(dpr,0,0,dpr,0,0);mctx.clearRect(0,0,W,H);
-  mctx.globalCompositeOperation='source-over';mctx.fillStyle='rgba(239,68,68,.7)';
+  mctx.globalCompositeOperation='source-over';mctx.fillStyle=rgba(ACC(),.85);
   path(mctx,poly,true);mctx.fill('evenodd');
   mctx.globalCompositeOperation='destination-out';mctx.fillStyle='#000';
   for(const c of circles){mctx.beginPath();mctx.arc(c.x,c.y,R,0,7);mctx.fill();}
   ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(mask,0,0);ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.save();path(ctx,poly,true);ctx.clip('evenodd');
-  ctx.fillStyle='rgba(34,197,94,.4)';
+  ctx.fillStyle=rgba(ACC(),.2);
   for(const c of circles){ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.fill();}
   ctx.restore();
-  ctx.strokeStyle=FG();ctx.lineWidth=2.5;ctx.lineJoin='round';path(ctx,poly,true);ctx.stroke();
   circles.forEach((c,i)=>{
-    ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.strokeStyle=['#4f46e5','#f59e0b','#ec4899'][i%3];ctx.lineWidth=2.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(c.x,c.y,R,0,7);ctx.strokeStyle=ACC();ctx.lineWidth=2.5;ctx.stroke();
     ctx.beginPath();ctx.arc(c.x,c.y,3,0,7);ctx.fillStyle=ctx.strokeStyle;ctx.fill();
   });
   if(phase==='draw')return;
   const un=uncoveredPx(circles,R);
   const pu=un>0?Math.max(0.1,un/totalPx*100):0;
   info('');show('stats',true);
-  $('cov').textContent=`${(100-pu).toFixed(1)}% covered`+(un===0?' ✓':'');$('cov').classList.toggle('ok',un===0);
+  $('cov').textContent=`${(100-pu).toFixed(1)}% covered`;$('cov').classList.toggle('ok',un===0);
   $('rad').textContent=`r = ${R.toFixed(1)}px`;
   if(mode==='rush'&&phase==='play'&&un===0&&!cleared&&!anim)levelClear();
 }
