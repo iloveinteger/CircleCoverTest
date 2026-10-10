@@ -20,6 +20,8 @@
   #wrap{flex:1;min-height:200px;margin:0 10px 10px;position:relative}
   canvas{position:absolute;left:0;top:0;width:100%;height:100%;background:var(--card);border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
   .ov{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:5;text-align:center;padding:20px}
+  #over{inset:auto 0 0 0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:14px 20px 20px;gap:8px;box-shadow:0 -4px 20px rgba(0,0,0,.15)}
+  #over h1{font-size:22px;margin:0}
   .hidden{display:none!important}
   .ov h1{margin:0 0 8px;font-size:28px}
   .card{width:min(320px,86vw);padding:16px;text-align:left}
@@ -50,9 +52,9 @@
 </div>
 <div id="over" class="ov hidden">
   <h1>Time's up</h1>
-  <div id="overTxt" style="font-size:18px;line-height:1.6"></div>
-  <button class="p" id="oRetry">Try again</button>
-  <button id="oMenu">Menu</button>
+  <div id="overTxt" style="font-size:16px;line-height:1.5"></div>
+  <div style="display:flex;gap:8px"><button class="p" id="oRetry">Try again</button>
+  <button id="oMenu">Menu</button></div>
 </div>
 <div id="toast"></div>
 
@@ -102,7 +104,7 @@ function mec(P){
 /* ================= 3-center solver ================= */
 function solve3(P){
   let best=null;const all=[];
-  for(let t=0;t<16;t++){
+  for(let t=0;t<10;t++){
     let cs=[P[Math.random()*P.length|0]];
     while(cs.length<3){
       let far=null,fd=-1;
@@ -186,10 +188,11 @@ function uncoveredPx(cs,r){
 
 /* ================= prepare: from poly -> optimal circles (slack = extra radius ratio) ================= */
 function prepare(slack){
-  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
-  for(const p of poly){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);}
-  inside=[];const s=3;
-  for(let y=y0;y<=y1;y+=s)for(let x=x0;x<=x1;x+=s)if(pip(x,y,poly))inside.push({x,y});
+  setupQ();                                   // rasterize polygon once
+  const d=qctx.getImageData(0,0,mc.width,mc.height).data;
+  inside=[];                                  // interior points read straight from pixels
+  for(let y=0;y<mc.height;y++)for(let x=0;x<mc.width;x++)
+    if(d[(y*mc.width+x)*4+3]>100)inside.push({x:(x+0.5)/Q,y:(y+0.5)/Q});
   if(inside.length<20){poly=null;return false;}
   const Pb=[];
   for(let i=0;i<poly.length;i++){
@@ -200,8 +203,12 @@ function prepare(slack){
   const P=inside.filter((_,i)=>i%k===0).concat(Pb.filter((_,i)=>i%kb===0));
   solved=solve3(P).cs;
   R=Math.sqrt(cover(solved,inside.concat(Pb)))+0.25;
-  setupQ();
-  for(let n=0;n<60&&uncoveredPx(solved,R)>0;n++)R+=0.25;   // grow until no uncovered pixel
+  if(uncoveredPx(solved,R)>0){                // pixel check: grow with doubling steps, then bisect
+    let lo=R,step=0.25,hi=R+step;
+    while(uncoveredPx(solved,hi)>0&&step<R){lo=hi;step*=2;hi+=step;}
+    for(let n=0;n<5;n++){const mid=(lo+hi)/2;if(uncoveredPx(solved,mid)>0)lo=mid;else hi=mid;}
+    R=hi;
+  }
   R*=1+slack;
   circles=[.2,.5,.8].map(f=>({x:W*f,y:H-R*0.6}));
   drag=null;anim=null;
@@ -329,15 +336,15 @@ function gameOver(){
   stopTimer();phase='over';drag=null;
   const nb=score>best();if(nb)setBest(score);
   $('overTxt').innerHTML=`Levels cleared: ${score}<br>Best: ${Math.max(score,best())}`+(nb&&score>0?'<br>🎉 New record!':'');
-  show('over',true);
+  toast('Here is a solution',1600);
+  slideToSolved(()=>show('over',true));
 }
 
 /* ---- solve (free / zen) ---- */
 const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
-$('bSolve').onclick=()=>{
-  if(!solved||anim||phase!=='play')return;
+function slideToSolved(done){
   let bp=null,bd=1e18;
-  for(const pm of perms){let s=0;for(let i=0;i<3;i++)s+=d2(circles[i],solved[pm[i]]);if(s<bd){bd=s;bp=pm}}
+  for(const pm of perms){let t=0;for(let i=0;i<3;i++)t+=d2(circles[i],solved[pm[i]]);if(t<bd){bd=t;bp=pm}}
   const from=circles.map(c=>({x:c.x,y:c.y})),to=bp.map(i=>solved[i]);
   const t0=performance.now(),D=900;
   anim=true;
@@ -345,8 +352,12 @@ $('bSolve').onclick=()=>{
     let u=Math.min(1,(t-t0)/D);u=1-Math.pow(1-u,3);
     circles.forEach((c,i)=>{c.x=from[i].x+(to[i].x-from[i].x)*u;c.y=from[i].y+(to[i].y-from[i].y)*u;});
     draw();
-    if(t-t0<D)requestAnimationFrame(step);else anim=null;
+    if(t-t0<D)requestAnimationFrame(step);else{anim=null;if(done)done();}
   })(t0);
+}
+$('bSolve').onclick=()=>{
+  if(!solved||anim||phase!=='play')return;
+  slideToSolved();
 };
 
 /* ================= render ================= */
