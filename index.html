@@ -199,10 +199,38 @@ function shrink(cs,P,fmin=3e-4){
   }
   return [0,1,2].map(i=>({x:cx[i],y:cy[i]}));
 }
+/* Partition local search: move extreme points of the bottleneck cluster to another cluster
+   (exact minimum enclosing circle each time). Lets a slack circle take work from the others. */
+function partSearch(P,cs){
+  const g=[[],[],[]];
+  for(const p of P){let bi=0,bd=1e18;for(let i=0;i<3;i++){const d=d2(cs[i],p);if(d<bd){bd=d;bi=i}}g[bi].push(p);}
+  const rad=g.map((a,i)=>a.length?mec(a):{x:cs[i].x,y:cs[i].y,r:0});
+  const key=rr=>rr.map(c=>c.r).sort((a,b)=>b-a);
+  const less=(a,b)=>{for(let i=0;i<3;i++){if(a[i]<b[i]-1e-9)return true;if(a[i]>b[i]+1e-9)return false;}return false;};
+  let curK=key(rad);
+  for(let it=0;it<80;it++){
+    let b=0;for(let i=1;i<3;i++)if(rad[i].r>rad[b].r)b=i;
+    const cb=rad[b];
+    const cand=g[b].map(p=>[d2(p,cb),p]).sort((x,y)=>y[0]-x[0]).slice(0,6).map(x=>x[1]);
+    let best=null,bestK=curK;
+    const tryMove=(pts,j)=>{
+      const nb=g[b].filter(p=>!pts.includes(p));if(!nb.length)return;
+      const cb2=mec(nb),cj2=mec(g[j].concat(pts));
+      const k=key([0,1,2].map(i=>i===b?cb2:i===j?cj2:rad[i]));
+      if(less(k,bestK)){bestK=k;best={pts,j,cb2,cj2};}
+    };
+    for(const p of cand)for(let j=0;j<3;j++)if(j!==b)tryMove([p],j);
+    if(!best)for(let a=0;a<cand.length;a++)for(let c=a+1;c<cand.length;c++)for(let j=0;j<3;j++)if(j!==b)tryMove([cand[a],cand[c]],j);
+    if(!best)break;
+    g[b]=g[b].filter(p=>!best.pts.includes(p));g[best.j]=g[best.j].concat(best.pts);
+    rad[b]=best.cb2;rad[best.j]=best.cj2;curK=bestK;
+  }
+  return rad.map(c=>({x:c.x,y:c.y}));
+}
 /* The solver works on a subsample. Find full-set points it left uncovered, add the worst
    ones to the working set, and shrink again (constraint generation). */
 function refineFull(cs,P,full){
-  P=P.slice();
+  P=P.slice();cs=partSearch(P,cs);
   for(let it=0;it<4;it++){
     const thr=cover(cs,P)*(1+2e-4),bad=[];
     for(const p of full){let d=1e18;
@@ -211,7 +239,7 @@ function refineFull(cs,P,full){
     if(!bad.length)break;
     bad.sort((a,b)=>b[0]-a[0]);
     for(const b of bad.slice(0,150))P.push(b[1]);
-    cs=shrink(cs,P);
+    cs=shrink(cs,P);cs=partSearch(P,cs);
   }
   return cs;
 }
