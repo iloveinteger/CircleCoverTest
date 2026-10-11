@@ -10,7 +10,8 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
   body{display:flex;flex-direction:column;max-width:900px;margin:0 auto}
-  button{font:inherit;color:var(--fg);cursor:pointer;border:0;background:none;padding:0}
+  html,body{touch-action:manipulation}
+  button{font:inherit;color:var(--fg);cursor:pointer;border:0;background:none;padding:0;touch-action:manipulation;-webkit-user-select:none;user-select:none}
   .hidden{display:none!important}
 
   #top{display:flex;align-items:center;gap:10px;padding:12px 14px 8px}
@@ -374,15 +375,19 @@ $('oRetry').onclick=()=>enterMode('rush');
 $('oMenu').onclick=openMenu;
 
 /* ---- free ---- */
-$('bConfirm').onclick=()=>{
+function confirmShape(){
   if(phase!=='draw')return;
   if(stroke.length<3){info('Draw a shape first');return;}
   poly=stroke.slice();phase='wait';info('Computing optimal radius…');
+  // show the closed shape right away so the press visibly registers
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);ctx.fillStyle=rgba(ACC(),.5);path(ctx,poly,true);ctx.fill('evenodd');
   setTimeout(()=>{
     if(!prepare(0)){info('Shape is too small');phase='draw';return;}
     phase='play';$('bSolve').disabled=false;draw();
-  },20);
-};
+  },30);
+}
+$('bConfirm').addEventListener('pointerdown',e=>{e.preventDefault();confirmShape();});
+$('bConfirm').onclick=confirmShape;
 $('bClear').onclick=()=>{resetState();phase='draw';info('Draw any shape on the canvas');draw();};
 
 /* ---- zen ---- */
