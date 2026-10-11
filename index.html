@@ -180,9 +180,10 @@ function shrink(cs,P,fmin=3e-4){
   const tx=new Float64Array(3),ty=new Float64Array(3),gx=new Float64Array(3),gy=new Float64Array(3),m=new Int32Array(3);
   const cov=(x,y)=>{let mx=0;for(let i=0;i<n;i++){const a=px[i],b=py[i];
     let d=(a-x[0])**2+(b-y[0])**2,e=(a-x[1])**2+(b-y[1])**2;if(e<d)d=e;e=(a-x[2])**2+(b-y[2])**2;if(e<d)d=e;if(d>mx)mx=d;}return Math.sqrt(mx);};
-  let r=cov(cx,cy),f=0.02;
-  while(f>fmin){
-    const rt=r*(1-f);tx.set(cx);ty.set(cy);
+  let r=cov(cx,cy),f=0.02,guard=0;
+  while(f>fmin&&guard++<400){
+    const rt=r*(1-f),tol=Math.max(0.25*f*rt,0.003);   // tolerance scales with the step, so every success really shrinks r
+    tx.set(cx);ty.set(cy);
     let ok=false,mark=1e18;
     for(let it=0;it<120;it++){
       gx.fill(0);gy.fill(0);m.fill(0);let mx=0;
@@ -192,7 +193,7 @@ function shrink(cs,P,fmin=3e-4){
         const d=Math.sqrt(bd);if(d>mx)mx=d;
         if(d>rt){const w=(d-rt)/d;gx[bi]+=w*(a-tx[bi]);gy[bi]+=w*(b-ty[bi]);m[bi]++;}
       }
-      if(mx<=rt+0.02){ok=true;break;}
+      if(mx<=rt+tol){ok=true;break;}
       if(it%15===14){if(mark-mx<2e-3*rt)break;mark=mx;}   // stalled -> fail early
       for(let i=0;i<3;i++)if(m[i]){tx[i]+=0.5*gx[i]/m[i];ty[i]+=0.5*gy[i]/m[i];}
     }
