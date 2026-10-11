@@ -6,7 +6,7 @@
 <title>3-Circle Cover</title>
 <style>
   :root{--bg:#f4f4f8;--fg:#17171c;--card:#fff;--line:#e3e3ea;--acc:#4f46e5;--mut:#7a7a88;--on:#fff;--shadow:0 6px 24px rgba(30,30,60,.08)}
-  @media (prefers-color-scheme:dark){:root{--bg:#0f0f14;--fg:#f1f1f6;--card:#1a1a22;--line:#2b2b36;--acc:#818cf8;--mut:#9a9aab;--on:#0f0f14;--shadow:0 6px 24px rgba(0,0,0,.4)}}
+  @media (prefers-color-scheme:dark){:root{--bg:#0f0f14;--fg:#f1f1f6;--card:#1a1a22;--line:#2b2b36;--acc:#6366f1;--mut:#9a9aab;--on:#fff;--shadow:0 6px 24px rgba(0,0,0,.4)}}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;height:100dvh;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
   body{display:flex;flex-direction:column;max-width:900px;margin:0 auto}
@@ -52,8 +52,8 @@
   #over{inset:auto 0 0 0;background:var(--card);border-top:1px solid var(--line);border-radius:22px 22px 0 0;padding:18px 20px max(20px,env(safe-area-inset-bottom));gap:10px;box-shadow:0 -10px 40px rgba(0,0,0,.2)}
   #over h1{font-size:22px;margin:0}
   #overTxt{font-size:15px;line-height:1.6;color:var(--mut)}
-  #toast{position:fixed;left:0;right:0;top:38%;text-align:center;font-size:38px;font-weight:800;letter-spacing:-.02em;pointer-events:none;opacity:0;transform:scale(.9);transition:opacity .2s,transform .2s;z-index:4;color:var(--acc);text-shadow:0 2px 20px var(--bg)}
-  #toast.show{opacity:1;transform:scale(1)}
+  #toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-8px);padding:12px 26px;border-radius:999px;background:var(--acc);color:var(--on);font-size:17px;font-weight:700;letter-spacing:.01em;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;z-index:4}
+  #toast.show{opacity:1;transform:translate(-50%,0)}
 </style>
 </head>
 <body>
@@ -405,7 +405,7 @@ const timeFor=l=>Math.max(7,32-2.5*(l-1));
 const slackFor=l=>Math.max(0.015,0.05-0.005*(l-1));
 function startLevel(){
   stopTimer();phase='wait';cleared=false;poly=null;circles=[];draw();
-  $('lv').textContent=`Level ${level}`;toast(`LEVEL ${level}`);$('tt').textContent='';$('tfill').style.width='100%';
+  $('lv').textContent=`Level ${level}`;toast(`Level ${level}`);$('tt').textContent='';$('tfill').style.width='100%';
   setTimeout(()=>{
     do{poly=randomShape(level);}while(!prepare(slackFor(level)));
     draw();
@@ -424,7 +424,7 @@ function tick(){
 }
 function levelClear(){
   cleared=true;stopTimer();phase='wait';score=level;
-  toast('CLEAR!',700);level++;
+  toast('Cleared',700);level++;
   setTimeout(startLevel,900);
 }
 function gameOver(){
